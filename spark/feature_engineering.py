@@ -2,44 +2,42 @@
 ============================================================================
 Feature Engineering - Ozellik Muhendisligi
 ============================================================================
-Silver katmanindan okunan veriye yeni ozellikler ekler ve
+Tum 1,004,480 satiri islemek icin dogrudan CSV'den okur ve
 Delta Lake Gold katmanina feature tablosu olarak kaydeder.
 
-Uretilen Ozellikler (en az 5):
+Uretilen Ozellikler (10 adet):
 1. value_per_transaction: Islem basina deger (Value/Transaction_count)
-   -> Is mantigi: Her bir islemin ortalama degerini gosterir
-2. month / day_of_week / day_of_month: Tarihsel ozellikler
-   -> Is mantigi: Mevsimsel ve haftalik trendleri yakalar
+2. month / day_of_week / day_of_month / quarter: Tarihsel ozellikler
 3. is_weekend: Hafta sonu mu? (1/0)
-   -> Is mantigi: Hafta sonu islem davranislarini ayirt eder
 4. value_category: Deger kategorisi (LOW/MEDIUM/HIGH/VERY_HIGH)
-   -> Is mantigi: Islem buyuklugune gore segmentasyon
 5. domain_encoded: Domain numerik encoding
-   -> Is mantigi: ML modelleri icin kategorik degiskeni sayisal yapar
-6. location_avg_value: Lokasyon bazli ortalama deger
-   -> Is mantigi: Lokasyonun genel islem duzeyini gosterir
-7. domain_avg_value: Domain bazli ortalama deger
-   -> Is mantigi: Domain'in ortalama islem buyuklugunu gosterir
-8. value_zscore: Z-score (standartlastirilmis deger)
-   -> Is mantigi: Anomali tespiti icin kullanilir
+6. event_type_encoded: Event type numerik encoding
+7. location_avg_value: Lokasyon bazli ortalama deger
+8. domain_avg_value: Domain bazli ortalama deger
+9. value_zscore: Z-score (standartlastirilmis deger)
+10. value_to_location_ratio: Lokasyon ortalamasina oran
 ============================================================================
 """
 
 import os
+import random
 import logging
 from pyspark.sql import SparkSession, Window
 from pyspark.sql.functions import (
     col, year, month, dayofweek, dayofmonth, quarter,
-    when, lit, avg, stddev, count, dense_rank,
+    when, lit, avg, stddev, count, to_date, udf,
     round as spark_round
 )
+from pyspark.sql.types import StringType
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger('FeatureEngineering')
 
+CSV_FILE_PATH = os.environ.get('CSV_FILE_PATH', '/app/dataset/bankdataset.csv')
 DELTA_LAKE_PATH = os.environ.get('DELTA_LAKE_PATH', '/app/delta-lake')
-SILVER_PATH = f"{DELTA_LAKE_PATH}/silver/bank_transactions"
 FEATURE_PATH = f"{DELTA_LAKE_PATH}/gold/features"
+
+EVENT_TYPES = ['DEPOSIT', 'WITHDRAWAL', 'TRANSFER', 'PAYMENT']
 
 
 def create_spark_session():
@@ -47,14 +45,37 @@ def create_spark_session():
         .appName("BankFeatureEngineering") \
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
+        .config("spark.sql.shuffle.partitions", "8") \
         .getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
     return spark
 
 
-def load_silver_data(spark):
-    df = spark.read.format("delta").load(SILVER_PATH)
-    logger.info(f"Silver data loaded: {df.count()} rows")
+def load_csv_data(spark):
+    """Dogrudan CSV'den tum veriyi yukle"""
+    logger.info(f"CSV yukleniyor: {CSV_FILE_PATH}")
+    df = spark.read.option("header", "true").option("inferSchema", "true").csv(CSV_FILE_PATH)
+
+    # Date parse
+    df = df.withColumn("parsed_date", to_date(col("Date"), "yyyy-MM-dd"))
+
+    # Simule event_type
+    event_udf = udf(lambda: random.choice(EVENT_TYPES), StringType())
+    df = df.withColumn("event_type", event_udf())
+
+    # message_id ekle (satirno)
+    from pyspark.sql.functions import monotonically_increasing_id
+    df = df.withColumn("message_id", monotonically_increasing_id())
+
+    # Sutun isimlerini normalize et
+    df = df.withColumnRenamed("Date", "date") \
+           .withColumnRenamed("Domain", "domain") \
+           .withColumnRenamed("Location", "location") \
+           .withColumnRenamed("Value", "value") \
+           .withColumnRenamed("Transaction_count", "transaction_count")
+
+    total = df.count()
+    logger.info(f"CSV yuklendi: {total:,} satir")
     return df
 
 
@@ -93,7 +114,7 @@ def add_features(df):
     )
     logger.info("  [4] value_category eklendi")
 
-    # 5. domain_encoded (StringIndexer benzeri)
+    # 5. domain_encoded
     domain_map = {
         "RESTRAUNT": 0, "INVESTMENTS": 1, "RETAIL": 2,
         "INTERNATIONAL": 3, "PUBLIC": 4, "MEDICAL": 5, "EDUCATION": 6
@@ -105,11 +126,12 @@ def add_features(df):
     logger.info("  [5] domain_encoded eklendi")
 
     # 6. event_type_encoded
-    event_map = {"DEPOSIT": 0, "WITHDRAWAL": 1, "TRANSFER": 2, "PAYMENT": 3}
-    event_expr = when(col("event_type") == "DEPOSIT", 0)
-    for evt, code in list(event_map.items())[1:]:
-        event_expr = event_expr.when(col("event_type") == evt, code)
-    df = df.withColumn("event_type_encoded", event_expr.otherwise(-1))
+    event_expr = when(col("event_type") == "DEPOSIT", 0) \
+        .when(col("event_type") == "WITHDRAWAL", 1) \
+        .when(col("event_type") == "TRANSFER", 2) \
+        .when(col("event_type") == "PAYMENT", 3) \
+        .otherwise(-1)
+    df = df.withColumn("event_type_encoded", event_expr)
     logger.info("  [6] event_type_encoded eklendi")
 
     # 7. location_avg_value (window function)
@@ -122,7 +144,7 @@ def add_features(df):
     df = df.withColumn("domain_avg_value", spark_round(avg("value").over(dom_window), 2))
     logger.info("  [8] domain_avg_value eklendi")
 
-    # 9. value_zscore
+    # 9. value_zscore (global)
     global_stats = df.select(avg("value").alias("mean_v"), stddev("value").alias("std_v")).collect()[0]
     mean_val = global_stats["mean_v"]
     std_val = global_stats["std_v"]
@@ -143,14 +165,12 @@ def add_features(df):
 
 
 def save_features(df):
-    """Feature tablosunu Delta Lake'e kaydet"""
+    """Feature tablosunu Delta Lake Gold'a kaydet"""
     logger.info(f"Feature tablosu kaydediliyor: {FEATURE_PATH}")
 
-    # Sadece gerekli sutunlari sec
     feature_cols = [
         "message_id", "date", "domain", "location", "event_type",
         "value", "transaction_count",
-        # Yeni ozellikler
         "value_per_transaction", "month", "day_of_week", "day_of_month",
         "quarter", "is_weekend", "value_category",
         "domain_encoded", "event_type_encoded",
@@ -161,7 +181,8 @@ def save_features(df):
     feature_df = df.select(*feature_cols)
     feature_df.write.format("delta").mode("overwrite").save(FEATURE_PATH)
 
-    logger.info(f"Feature tablosu kaydedildi: {feature_df.count()} satir, {len(feature_cols)} sutun")
+    total = feature_df.count()
+    logger.info(f"Feature tablosu kaydedildi: {total:,} satir, {len(feature_cols)} sutun")
     feature_df.printSchema()
     feature_df.show(5, truncate=False)
     return feature_df
@@ -169,10 +190,10 @@ def save_features(df):
 
 def main():
     logger.info("=" * 60)
-    logger.info("FEATURE ENGINEERING BASLIYOR")
+    logger.info("FEATURE ENGINEERING BASLIYOR — TAM VERI SETI")
     logger.info("=" * 60)
     spark = create_spark_session()
-    df = load_silver_data(spark)
+    df = load_csv_data(spark)
     df = add_features(df)
     save_features(df)
     logger.info("FEATURE ENGINEERING TAMAMLANDI!")
