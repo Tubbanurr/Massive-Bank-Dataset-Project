@@ -65,11 +65,16 @@ EDA_PATH = f'{OUTPUT_PATH}/eda'
 
 
 def load_ml_results():
-    """ML sonuclarini yukle"""
+    """ML sonuclarini ve gorsel verilerini yukle"""
+    data = {}
     try:
         with open(f'{ML_PATH}/model_results.json', 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
+            data['results'] = json.load(f)
+        with open(f'{ML_PATH}/feature_importance.json', 'r') as f:
+            data['importance'] = json.load(f)
+        data['plot_data'] = pd.read_csv(f'{ML_PATH}/plot_data.csv')
+        return data
+    except Exception:
         return None
 
 
@@ -194,71 +199,84 @@ elif page == "📊 EDA Analizi":
 # ==================== ML KARSILASTIRMA ====================
 elif page == "🤖 ML Model Karsilastirma":
     st.markdown('<div class="section-header">ML Model Karsilastirmasi</div>', unsafe_allow_html=True)
-    results = load_ml_results()
+    ml_data = load_ml_results()
 
-    if results:
-        # Metrik tablosu
-        df = pd.DataFrame(results)
+    if ml_data:
+        # Yeni JSON formatina gore veriyi hazirla
+        results = ml_data['results']
+        df_list = []
+        for name, metrics in results.items():
+            df_list.append({
+                "model_name": name,
+                "rmse": metrics.get("rmse", 0),
+                "mae": metrics.get("mae", 0),
+                "r2": metrics.get("r2", 0)
+            })
+        df = pd.DataFrame(df_list)
+
         st.markdown("#### Model Metrikleri")
         st.dataframe(df[['model_name','rmse','mae','r2']].style.highlight_min(
             subset=['rmse','mae'], color='#a8e6cf').highlight_max(
             subset=['r2'], color='#a8e6cf'), use_container_width=True)
 
-        # Grouped bar chart
+        # Grafik Karsilastirmasi
         st.markdown("#### Performans Karsilastirmasi")
-        fig = make_subplots(rows=1, cols=3, subplot_titles=('RMSE (dusuk=iyi)', 'MAE (dusuk=iyi)', 'R² (yuksek=iyi)'))
-        colors = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6']
-
-        for i, (metric, title) in enumerate([('rmse','RMSE'),('mae','MAE'),('r2','R²')]):
-            fig.add_trace(go.Bar(
-                x=df['model_name'], y=df[metric],
-                marker_color=colors, name=title, showlegend=False
-            ), row=1, col=i+1)
-
-        fig.update_layout(height=400, title_text="5 Model Performans Karsilastirmasi")
+        fig = make_subplots(rows=1, cols=2, subplot_titles=('RMSE (dusuk=iyi)', 'R² (yuksek=iyi)'))
+        fig.add_trace(go.Bar(x=df['model_name'], y=df['rmse'], name='RMSE', marker_color='#e74c3c'), row=1, col=1)
+        fig.add_trace(go.Bar(x=df['model_name'], y=df['r2'], name='R²', marker_color='#2ecc71'), row=1, col=2)
+        fig.update_layout(height=400, showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
 
+        # Zorunlu Analiz Grafikleri
+        st.markdown("#### 🔍 Detaylı Regresyon Analizi")
+        plot_data = ml_data['plot_data']
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(px.scatter(plot_data, x="actual", y="predicted", trendline="ols", title="Gerçek vs Tahmin"), use_container_width=True)
+        with col2:
+            st.plotly_chart(px.histogram(plot_data, x="residual", nbins=50, title="Residual (Artık) Dağılımı"), use_container_width=True)
         # Gorseller
         ml_images = [f for f in os.listdir(ML_PATH) if f.endswith('.png')] if os.path.exists(ML_PATH) else []
         if ml_images:
-            st.markdown("#### Detayli Gorseller")
+            st.markdown("#### Detaylı Görseller")
             cols = st.columns(2)
             for i, img in enumerate(sorted(ml_images)):
                 with cols[i % 2]:
                     st.image(f'{ML_PATH}/{img}', caption=img.replace('.png','').replace('_',' '), use_column_width=True)
     else:
-        st.warning("ML sonuclari henuz mevcut degil. ML training'i calistirin.")
+        st.warning("⚠️ ML sonuçları henüz mevcut değil. Lütfen eğitimi tamamlayın.")
+
 
 # ==================== ZAMAN SERISI ====================
 elif page == "📈 Zaman Serisi":
-    st.markdown('<div class="section-header">Zaman Serisi Analizi</div>', unsafe_allow_html=True)
-    eda = load_eda_data()
-
-    if eda.get('monthly') is not None:
-        monthly = eda['monthly']
-
+    st.markdown('<div class="section-header">Günlük İşlem Trend Analizi (31 Gün)</div>', unsafe_allow_html=True)
+    
+    try:
+        daily_df = pd.read_csv(f'{EDA_PATH}/daily_stats.csv')
+        
         col1, col2 = st.columns(2)
         with col1:
-            fig = px.line(monthly, x='month', y='total_value', markers=True,
-                          title='Aylik Toplam Islem Degeri',
+            fig = px.line(daily_df, x='day', y='total_value', markers=True,
+                          title='Günlük Toplam İşlem Değeri',
                           color_discrete_sequence=['#e74c3c'])
             fig.update_layout(height=400)
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
-            fig = px.line(monthly, x='month', y='count', markers=True,
-                          title='Aylik Islem Sayisi',
+            fig = px.line(daily_df, x='day', y='transaction_count', markers=True,
+                          title='Günlük İşlem Sayısı',
                           color_discrete_sequence=['#3498db'])
             fig.update_layout(height=400)
             st.plotly_chart(fig, use_container_width=True)
 
-        fig = px.line(monthly, x='month', y='avg_value', markers=True,
-                      title='Aylik Ortalama Islem Degeri Trendi',
+        fig = px.area(daily_df, x='day', y='avg_value', 
+                      title='Günlük Ortalama İşlem Değeri Trendi',
                       color_discrete_sequence=['#2ecc71'])
         fig.update_layout(height=400)
         st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.warning("Zaman serisi verileri henuz mevcut degil.")
+    except Exception:
+        st.warning("Günlük trend verileri henüz mevcut değil.")
+
 
 # ==================== FEATURE IMPORTANCE ====================
 elif page == "🔍 Feature Importance":
