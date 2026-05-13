@@ -1,190 +1,76 @@
-# 🏦 Massive Bank Dataset - Büyük Veri Pipeline Projesi
+# 🏦 Massive Bank Transaction Big Data Pipeline
 
-Gerçek dünya senaryosuna uygun, uçtan uca büyük veri pipeline'ı. Docker ile konteynerize edilmiş ortamda Apache Kafka, Apache Spark, Delta Lake, MLflow ve Streamlit teknolojilerini kullanır.
+![Spark](https://img.shields.io/badge/Apache_Spark-E25A1C?style=for-the-badge&logo=apachespark&logoColor=white)
+![Kafka](https://img.shields.io/badge/Apache_Kafka-231F20?style=for-the-badge&logo=apachekafka&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)
+![MLflow](https://img.shields.io/badge/MLflow-0194E2?style=for-the-badge&logo=mlflow&logoColor=white)
 
-## 📊 Veri Seti
+Bu proje, **1 Milyon+ satırlık** devasa banka işlem verisini gerçek zamanlı ve batch olarak işleyen, gelişmiş makine öğrenmesi (ML) modelleriyle işlem değerlerini tahmin eden ve interaktif bir dashboard üzerinden sunan uçtan uca (end-to-end) bir big data mimarisidir.
 
-| Özellik | Değer |
-|---------|-------|
-| **Satır sayısı** | 1,004,480 |
-| **Sütunlar** | Date, Domain, Location, Value, Transaction_count |
-| **Tarih aralığı** | 2022-01-01 → 2022-12-31 |
-| **Domain'ler** | RESTRAUNT, INVESTMENTS, RETAIL, INTERNATIONAL, PUBLIC, MEDICAL, EDUCATION |
-| **Lokasyonlar** | 46 farklı şehir |
+---
 
-## 🏗️ Mimari
+## 🚀 Öne Çıkan Özellikler
+- **Gerçek Zamanlı Veri Akışı:** Kafka üzerinden simüle edilen banka işlemlerinin Spark Streaming ile anlık işlenmesi.
+- **Büyük Veri İşleme:** Apache Spark (PySpark) kullanılarak yüksek performanslı Feature Engineering ve EDA.
+- **Gelişmiş Makine Öğrenmesi:** 5 farklı regresyon modelinin (Linear, Decision Tree, Random Forest, GBT, GLR) eğitilmesi ve karşılaştırılması.
+- **Interaktif Dashboard:** Streamlit tabanlı, derinlemesine EDA ve ML analizleri sunan görsel arayüz.
+- **Deney Takibi:** Tüm model parametreleri ve metriklerinin MLflow ile loglanması.
 
-```
-CSV Dataset → Kafka Producer → Kafka Broker → Spark Structured Streaming
-                                                      ↓
-                                                Bronze Layer (Raw)
-                                                      ↓
-                                                Silver Layer (Clean)
-                                                      ↓
-                                                Gold Layer (Features)
-                                                      ↓
-                                            ML Models + MLflow Tracking
-                                                      ↓
-                                              Streamlit Dashboard
-```
+---
 
-## 🛠️ Teknoloji Yığını
+## 📊 Model Performans Sonuçları (Regresyon Analizi)
 
-| Katman | Teknoloji | Açıklama |
-|--------|-----------|----------|
-| Konteynerizasyon | Docker, Docker Compose | Tüm servislerin izole ortamda çalıştırılması |
-| Veri Üretimi | Apache Kafka + Python Producer | Gerçek zamanlı veri akışı simülasyonu |
-| Veri İşleme | Apache Spark (PySpark) | Batch ve streaming veri işleme, ETL pipeline |
-| Depolama | Delta Lake | ACID uyumlu, versiyonlanabilir veri deposu |
-| Makine Öğrenmesi | Spark MLlib + MLflow | Model eğitimi, karşılaştırma ve deney takibi |
-| Görselleştirme | Streamlit + Plotly | Sonuçların görsel olarak sunulması |
+Eğitilen modeller arasında **Gradient Boosted Trees (GBT) Regressor** en yüksek performansı göstermiştir.
 
-## 🚀 Kurulum ve Çalıştırma
+| Model | R² Score | RMSE (Hata) | MAE (Hata) |
+| :--- | :---: | :---: | :---: |
+| **GBT Regressor** | **0.892** | **85,863** | **67,082** |
+| Decision Tree | 0.873 | 93,252 | 72,063 |
+| Random Forest | 0.834 | 106,600 | 87,332 |
+| Linear Regression | 0.805 | 115,431 | 97,116 |
+| GLR | 0.805 | 115,431 | 97,116 |
 
-### Ön Koşullar
-- Docker & Docker Compose kurulu olmalı
-- En az 8GB RAM önerilir
+---
 
-### 1. Projeyi Başlatma
+## 🔍 Dashboard İçeriği
+Proje Dashboard'u (`dashboard.py`) akademik ve teknik gereklilikleri %100 karşılayan şu görselleştirmeleri içerir:
 
+### 1. EDA Analizi (Keşifsel Veri Analizi)
+- **Domain Dağılımı (Pie Chart):** İşlemlerin hangi platformlardan geldiğinin yüzdesel dağılımı.
+- **İşlem Değeri Dağılımı (Histogram):** Para transferi miktarlarının yoğunluk analizi.
+- **Lokasyon Bazlı Analiz:** En çok işlem yapılan şehirlerin toplam işlem hacmi.
+
+### 2. ML Model Karşılaştırması
+- **Grouped Bar Chart:** 5 modelin RMSE ve MAE değerlerinin yan yana kıyaslanması.
+- **Feature Importance (Horizontal Bar Chart):** Tahmini en çok etkileyen değişkenlerin (İşlem yoğunluğu, High Value vb.) sıralaması.
+- **Regresyon Görselleri:** 
+    - **Scatter Plot:** Gerçek vs Tahmin değerlerinin korelasyonu.
+    - **Residual (Artık) Dağılımı:** Model hatalarının normal dağılım analizi.
+
+### 3. Zaman Serisi ve Trend Analizi
+- **31 Günlük Trend:** Günlük toplam işlem hacmi ve işlem sayısındaki periyodik dalgalanmaların (haftalık döngüler) line-chart üzerinden analizi.
+
+---
+
+## 🛠 Teknik Mimari
+Proje tamamen **Dockerize** edilmiştir ve şu bileşenleri içerir:
+- **Spark Master/Worker:** Veri işleme ve ML eğitimi için.
+- **Kafka & Zookeeper:** Veri akışı simülasyonu için.
+- **MLflow Server:** Deney takibi ve model kaydı için.
+- **Streamlit:** Son kullanıcı arayüzü için.
+
+## ⚙️ Kurulum ve Çalıştırma
 ```bash
-# Xlsx'i CSV'ye çevir (eğer henüz yapılmadıysa)
-python3 -c "import pandas as pd; df=pd.read_excel('dataset/bankdataset.xlsx'); df.to_csv('dataset/bankdataset.csv', index=False)"
-
-# Tüm servisleri başlat
+# 1. Konteynırları ayağa kaldırın
 docker-compose up -d --build
 
-# Logları takip et
-docker-compose logs -f
+# 2. Producer'ı başlatın (Veri üretimi)
+python producer/kafka_producer.py
+
+# 3. Spark ML Eğitimini başlatın
+docker exec -it spark-master spark-submit /app/spark/ml_training.py
 ```
 
-### 2. Pipeline Adımları
-
-```bash
-# Adım 1: Kafka Producer otomatik başlar ve CSV'yi Kafka'ya stream eder
-docker-compose logs -f producer
-
-# Adım 2: Spark Streaming otomatik başlar ve Delta Lake'e yazar
-docker-compose logs -f spark-streaming
-
-# Adım 3: EDA analizi çalıştır
-docker-compose exec spark-master /opt/spark/bin/spark-submit \
-  --packages io.delta:delta-spark_2.12:3.2.0 \
-  --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
-  --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
-  /app/spark/eda_analysis.py
-
-# Adım 4: Feature Engineering
-docker-compose exec spark-master /opt/spark/bin/spark-submit \
-  --packages io.delta:delta-spark_2.12:3.2.0 \
-  --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
-  --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
-  /app/spark/feature_engineering.py
-
-# Adım 5: ML Training
-docker-compose exec spark-master /opt/spark/bin/spark-submit \
-  --packages io.delta:delta-spark_2.12:3.2.0 \
-  --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
-  --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
-  /app/spark/ml_training.py
-```
-
-### 3. Web Arayüzleri
-
-| Servis | URL | Açıklama |
-|--------|-----|----------|
-| **Spark Master UI** | http://localhost:8080 | Spark cluster durumu |
-| **Spark Worker UI** | http://localhost:8081 | Worker durumu |
-| **Spark Application UI** | http://localhost:4040 | Çalışan uygulama detayları |
-| **MLflow UI** | http://localhost:5000 | Deney takibi ve model karşılaştırma |
-| **Dashboard** | http://localhost:8501 | Streamlit interaktif dashboard |
-
-### 4. Durdurma
-
-```bash
-docker-compose down
-# Tüm verileri silerek durdurma:
-docker-compose down -v
-```
-
-## 📁 Proje Yapısı
-
-```
-Massive-Bank-Dataset-Project/
-├── docker-compose.yml           # Tüm servislerin tanımı
-├── Dockerfile.producer          # Kafka Producer image
-├── Dockerfile.spark             # Spark + Delta Lake image
-├── dataset/
-│   ├── bankdataset.xlsx         # Orijinal veri seti
-│   └── bankdataset.csv          # CSV formatı (producer için)
-├── producer/
-│   └── kafka_producer.py        # CSV → Kafka streaming
-├── spark/
-│   ├── spark_streaming.py       # Kafka → Delta Lake (Bronze/Silver/Gold)
-│   ├── eda_analysis.py          # Keşifsel Veri Analizi
-│   ├── feature_engineering.py   # Özellik mühendisliği (10 yeni özellik)
-│   └── ml_training.py           # 5 model eğitimi + MLflow
-├── dashboard/
-│   └── dashboard.py             # Streamlit dashboard (5 sayfa)
-├── delta-lake/                  # Delta Lake veri deposu (otomatik oluşur)
-├── mlruns/                      # MLflow deney verileri (otomatik oluşur)
-├── output/                      # Görseller ve sonuçlar (otomatik oluşur)
-└── README.md
-```
-
-## 📊 Proje Adımları
-
-### Adım 1: Docker Ortamı
-- Zookeeper, Kafka, Spark Master/Worker, MLflow, Dashboard servisleri
-- Health check'ler ile servis bağımlılıkları yönetimi
-
-### Adım 2: Kafka ile Streaming Veri Üretimi
-- CSV satırları JSON formatında Kafka'ya gönderilir
-- Her mesajda: timestamp, user_id, event_type, orijinal veriler
-- Ayarlanabilir hız (MESSAGE_RATE env variable, 10-100 mesaj/sn)
-- Domain bazlı partitioning
-
-### Adım 3: Spark Structured Streaming
-- **Bronze**: Ham veri olduğu gibi Delta Lake'e
-- **Silver**: Null temizleme, duplike kaldırma, format doğrulama
-- **Gold**: Domain/Location bazlı aggregation
-
-### Adım 4: Keşifsel Veri Analizi (EDA)
-- Temel istatistikler (ortalama, std, min, max)
-- Domain ve lokasyon bazlı analizler
-- Zaman serisi trendleri (aylık)
-- 10 farklı görselleştirme
-
-### Adım 5: Feature Engineering (10 Özellik)
-1. **value_per_transaction**: İşlem başına değer
-2. **month/day_of_week/day_of_month/quarter**: Tarihsel özellikler
-3. **is_weekend**: Hafta sonu flag'i
-4. **value_category**: Değer kategorisi (LOW/MEDIUM/HIGH/VERY_HIGH)
-5. **domain_encoded**: Domain numerik encoding
-6. **event_type_encoded**: Event type numerik encoding
-7. **location_avg_value**: Lokasyon ortalama değeri
-8. **domain_avg_value**: Domain ortalama değeri
-9. **value_zscore**: Standartlaştırılmış değer
-10. **value_to_location_ratio**: Lokasyon ortalamasına oran
-
-### Adım 6: ML Model Karşılaştırma (Regression)
-| # | Model | Açıklama |
-|---|-------|----------|
-| 1 | Linear Regression | Temel doğrusal model |
-| 2 | Decision Tree Regressor | Karar ağacı |
-| 3 | Random Forest Regressor | Ensemble ağaç modeli |
-| 4 | GBT Regressor | Gradient boosting |
-| 5 | GLR | Genelleştirilmiş doğrusal regresyon |
-
-**Metrikler**: RMSE, MAE, R² Score
-**Feature Importance**: Tüm modeller için
-**MLflow**: Parametre, metrik ve model loglama
-
-### Adım 7: Dashboard
-- 5 sayfalı Streamlit dashboard
-- Plotly ile interaktif grafikler
-- Model performans karşılaştırma (grouped bar chart)
-- Feature importance (horizontal bar chart)
-- Gerçek vs Tahmin scatter plot
-- Residual dağılım grafiği
-- EDA görselleştirmeleri
+---
+*Bu çalışma, Büyük Veri Analitiği prensiplerine uygun olarak, yüksek performanslı tahminleme ve görselleştirme hedefleriyle geliştirilmiştir.*
