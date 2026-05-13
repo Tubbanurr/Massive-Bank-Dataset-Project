@@ -1,0 +1,17 @@
+FROM python:3.11-slim
+
+LABEL maintainer="bank-pipeline"
+LABEL description="Kafka Producer - Bank Transaction Streaming"
+
+WORKDIR /app
+
+# Install dependencies
+RUN pip install --no-cache-dir \
+    kafka-python==2.0.2 \
+    pandas==2.1.4 \
+    openpyxl==3.1.2
+
+# Copy producer script
+COPY producer/ /app/producer/
+
+CMD ["python", "/app/producer/kafka_producer.py"]

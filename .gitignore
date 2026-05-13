@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Spark / Hadoop
+spark-warehouse/
+metastore_db/
+derby.log
+checkpoint/
+
+# Project Specific
+delta-lake/
+mlruns/
+output/
+dataset/*.xlsx
+dataset/*.csv
+!.gitignore
+
+# OS
+.DS_Store
+Thumbs.db

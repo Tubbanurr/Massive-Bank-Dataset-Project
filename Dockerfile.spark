@@ -1,0 +1,27 @@
+FROM apache/spark:3.5.0
+
+LABEL maintainer="bank-pipeline"
+LABEL description="Apache Spark + Delta Lake + MLflow"
+
+USER root
+
+# Install required system packages for Delta Lake and Python
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# Install Python packages
+RUN pip3 install --no-cache-dir \
+    pyspark==3.5.0 \
+    delta-spark==3.2.0 \
+    mlflow \
+    pandas \
+    numpy \
+    scikit-learn \
+    matplotlib \
+    seaborn
+
+WORKDIR /app
+
+# Copy Spark scripts
+COPY spark/ /app/spark/
+
+EXPOSE 8080 8081 7077 4040
