@@ -198,53 +198,55 @@ elif page == "📊 EDA Analizi":
 
 # ==================== ML KARSILASTIRMA ====================
 elif page == "🤖 ML Model Karsilastirma":
-    st.markdown('<div class="section-header">ML Model Karsilastirmasi</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">🤖 ML Model Karşılaştırması ve Regresyon Analizi</div>', unsafe_allow_html=True)
     ml_data = load_ml_results()
 
     if ml_data:
-        # Yeni JSON formatina gore veriyi hazirla
-        results = ml_data['results']
+        # VERI HAZIRLAMA (Hem dict hem list destekleyen ultra saglam yapi)
+        results = ml_data.get('results', {})
         df_list = []
-        for name, metrics in results.items():
-            df_list.append({
-                "model_name": name,
-                "rmse": metrics.get("rmse", 0),
-                "mae": metrics.get("mae", 0),
-                "r2": metrics.get("r2", 0)
-            })
+        
+        if isinstance(results, dict):
+            for name, m in results.items():
+                if isinstance(m, dict):
+                    df_list.append({"model_name": name, "rmse": m.get("rmse", 0), "mae": m.get("mae", 0), "r2": m.get("r2", 0)})
+        elif isinstance(results, list):
+            for item in results:
+                if isinstance(item, dict):
+                    df_list.append({"model_name": item.get("model_name", "Model"), "rmse": item.get("rmse", 0), "mae": item.get("mae", 0), "r2": item.get("r2", 0)})
+        
         df = pd.DataFrame(df_list)
 
-        st.markdown("#### Model Metrikleri")
-        st.dataframe(df[['model_name','rmse','mae','r2']].style.highlight_min(
-            subset=['rmse','mae'], color='#a8e6cf').highlight_max(
-            subset=['r2'], color='#a8e6cf'), use_container_width=True)
+        if not df.empty:
+            st.markdown("#### ✅ Model Performans Metrikleri")
+            st.dataframe(df[['model_name','rmse','mae','r2']].style.highlight_min(
+                subset=['rmse','mae'], color='#a8e6cf').highlight_max(
+                subset=['r2'], color='#a8e6cf'), use_container_width=True)
 
-        # Grafik Karsilastirmasi
-        st.markdown("#### Performans Karsilastirmasi")
-        fig = make_subplots(rows=1, cols=2, subplot_titles=('RMSE (dusuk=iyi)', 'R² (yuksek=iyi)'))
-        fig.add_trace(go.Bar(x=df['model_name'], y=df['rmse'], name='RMSE', marker_color='#e74c3c'), row=1, col=1)
-        fig.add_trace(go.Bar(x=df['model_name'], y=df['r2'], name='R²', marker_color='#2ecc71'), row=1, col=2)
-        fig.update_layout(height=400, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+            # Performans Grafikleri
+            st.markdown("#### 📊 Performans Karşılaştırması")
+            from plotly.subplots import make_subplots
+            fig = make_subplots(rows=1, cols=2, subplot_titles=('RMSE (Düşük=İyi)', 'R² Score (Yüksek=İyi)'))
+            fig.add_trace(go.Bar(x=df['model_name'], y=df['rmse'], name='RMSE', marker_color='#e74c3c'), row=1, col=1)
+            fig.add_trace(go.Bar(x=df['model_name'], y=df['r2'], name='R²', marker_color='#2ecc71'), row=1, col=2)
+            fig.update_layout(height=400, showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
 
-        # Zorunlu Analiz Grafikleri
-        st.markdown("#### 🔍 Detaylı Regresyon Analizi")
-        plot_data = ml_data['plot_data']
-        col1, col2 = st.columns(2)
-        with col1:
-            st.plotly_chart(px.scatter(plot_data, x="actual", y="predicted", trendline="ols", title="Gerçek vs Tahmin"), use_container_width=True)
-        with col2:
-            st.plotly_chart(px.histogram(plot_data, x="residual", nbins=50, title="Residual (Artık) Dağılımı"), use_container_width=True)
-        # Gorseller
-        ml_images = [f for f in os.listdir(ML_PATH) if f.endswith('.png')] if os.path.exists(ML_PATH) else []
-        if ml_images:
-            st.markdown("#### Detaylı Görseller")
-            cols = st.columns(2)
-            for i, img in enumerate(sorted(ml_images)):
-                with cols[i % 2]:
-                    st.image(f'{ML_PATH}/{img}', caption=img.replace('.png','').replace('_',' '), use_column_width=True)
+            # Regresyon Analizi - ZORUNLU
+            st.markdown("#### 📈 Detaylı Regresyon Analizi (Scatter vs Residuals)")
+            plot_data = ml_data.get('plot_data')
+            if plot_data is not None:
+                pdf = pd.DataFrame(plot_data)
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.plotly_chart(px.scatter(pdf, x="actual", y="predicted", trendline="ols", title="Gerçek vs Tahmin"), use_container_width=True)
+                with col2:
+                    st.plotly_chart(px.histogram(pdf, x="residual", nbins=50, title="Residual (Artık) Dağılımı"), use_container_width=True)
+        else:
+            st.error("Model verileri işlenemedi. Lütfen eğitimi kontrol edin.")
     else:
-        st.warning("⚠️ ML sonuçları henüz mevcut değil. Lütfen eğitimi tamamlayın.")
+        st.warning("⚠️ ML sonuçları henüz mevcut değil.")
+
 
 
 # ==================== ZAMAN SERISI ====================
@@ -280,24 +282,33 @@ elif page == "📈 Zaman Serisi":
 
 # ==================== FEATURE IMPORTANCE ====================
 elif page == "🔍 Feature Importance":
-    st.markdown('<div class="section-header">Feature Importance Analizi</div>', unsafe_allow_html=True)
-    results = load_ml_results()
+    st.markdown('<div class="section-header">🔍 Detaylı Feature Importance Analizi</div>', unsafe_allow_html=True)
+    ml_data = load_ml_results()
 
-    if results:
-        for r in results:
-            fi = r.get('feature_importance', {})
-            if fi:
-                st.markdown(f"#### {r['model_name']}")
-                fi_df = pd.DataFrame(list(fi.items()), columns=['Feature','Importance'])
-                fi_df = fi_df.sort_values('Importance', ascending=True)
+    if ml_data and 'importance' in ml_data:
+        importance = ml_data['importance']
+        # Veri formatini kontrol et (dict mi degil mi)
+        if isinstance(importance, dict):
+            fi_df = pd.DataFrame(list(importance.items()), columns=['Özellik', 'Önem Skoru'])
+            fi_df = fi_df.sort_values('Önem Skoru', ascending=True)
 
-                fig = px.bar(fi_df, x='Importance', y='Feature', orientation='h',
-                             color='Importance', color_continuous_scale='Blues',
-                             title=f'{r["model_name"]} - Feature Importance')
-                fig.update_layout(height=400)
-                st.plotly_chart(fig, use_container_width=True)
+            st.markdown("#### Özelliklerin Tahmin Üzerindeki Etkisi")
+            fig = px.bar(fi_df, x='Önem Skoru', y='Özellik', orientation='h',
+                         color='Önem Skoru', color_continuous_scale='Reds',
+                         title='Model Özellik Önem Sıralaması')
+            fig.update_layout(height=600)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.info("""
+            **Analiz Özeti:**
+            - **İşlem Yoğunluğu:** Modelin en çok dikkat ettiği faktör.
+            - **Yüksek Değerli İşlem:** Tahmini doğrudan etkileyen ana değişken.
+            """)
+        else:
+            st.error("Feature Importance verisi işlenemedi.")
     else:
-        st.warning("ML sonuclari henuz mevcut degil.")
+        st.warning("⚠️ ML sonuçları henüz mevcut değil.")
+
 
 # ==================== FOOTER ====================
 st.markdown("---")
